@@ -152,15 +152,18 @@ export class Renderer {
     this.raf = requestAnimationFrame(this.frame);
   }
   project(x, y, h = 0) {
+    const cx = SIZE / 2, cy = SIZE / 2;
     let rx = x, ry = y;
 
-    // 3D rotation around Y-axis (vertical) - orbiting the island
+    // Orbital camera: translate view as if camera orbits the island
     if (this.rotation) {
-      const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
-      const cx = SIZE / 2, cy = SIZE / 2;
-      const dx = x - cx, dy = y - cy;
-      rx = cx + dx * cos - dy * sin;
-      ry = cy + dx * sin + dy * cos;
+      // Camera orbits at a radius from the isometric center
+      // This creates circular pan motion that looks like the camera moving around the island
+      const r = SIZE / 4; // Orbital radius
+      const ox = r * Math.cos(this.rotation);
+      const oy = r * Math.sin(this.rotation);
+      rx = x + ox;
+      ry = y + oy;
     }
 
     const px = this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x;
