@@ -152,26 +152,25 @@ export class Renderer {
     this.raf = requestAnimationFrame(this.frame);
   }
   project(x, y, h = 0) {
-    let px = this.w / 2 + ((x - y) * this.tw) / 2;
-    let py =
-      this.h * 0.48 +
-      ((x + y - SIZE + 1) * this.th) / 2 -
-      h * this.elev;
+    let rx = x, ry = y;
 
-    // Apply rotation around screen center (before pan)
+    // 3D rotation around Y-axis (vertical) - orbiting the island
     if (this.rotation) {
-      const cx = this.w / 2, cy = this.h / 2;
-      const dx = px - cx, dy = py - cy;
       const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
-      px = cx + dx * cos - dy * sin;
-      py = cy + dx * sin + dy * cos;
+      const cx = SIZE / 2, cy = SIZE / 2;
+      const dx = x - cx, dy = y - cy;
+      rx = cx + dx * cos - dy * sin;
+      ry = cy + dx * sin + dy * cos;
     }
 
-    // Apply pan after rotation (independent of angle)
-    return {
-      x: px + this.pan.x,
-      y: py + this.pan.y,
-    };
+    const px = this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x;
+    const py =
+      this.h * 0.48 +
+      ((rx + ry - SIZE + 1) * this.th) / 2 -
+      h * this.elev +
+      this.pan.y;
+
+    return { x: px, y: py };
   }
   polygon(points, fill, stroke) {
     const c = this.c;
