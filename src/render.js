@@ -152,19 +152,25 @@ export class Renderer {
     this.raf = requestAnimationFrame(this.frame);
   }
   project(x, y, h = 0) {
-    const cx = SIZE / 2, cy = SIZE / 2;
-    const dx = x - cx, dy = y - cy;
-    const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
-    const rx = cx + dx * cos - dy * sin;
-    const ry = cy + dx * sin + dy * cos;
-    return {
-      x: this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x,
+    const p = {
+      x: this.w / 2 + ((x - y) * this.tw) / 2 + this.pan.x,
       y:
         this.h * 0.48 +
-        ((rx + ry - SIZE + 1) * this.th) / 2 -
+        ((x + y - SIZE + 1) * this.th) / 2 -
         h * this.elev +
         this.pan.y,
     };
+
+    // Apply rotation around screen center
+    if (this.rotation) {
+      const cx = this.w / 2, cy = this.h / 2;
+      const dx = p.x - cx, dy = p.y - cy;
+      const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
+      p.x = cx + dx * cos - dy * sin;
+      p.y = cy + dx * sin + dy * cos;
+    }
+
+    return p;
   }
   polygon(points, fill, stroke) {
     const c = this.c;
