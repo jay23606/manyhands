@@ -469,6 +469,16 @@ export class Renderer {
   }
   shrine(p, s, time) {
     const c = this.c;
+    // Animated halo around shrine
+    const haloPhase = time * 0.5;
+    const haloRadius = 25 * s + Math.sin(haloPhase) * 2 * s;
+    const haloPulse = 0.3 + Math.sin(haloPhase * 2) * 0.2;
+    c.strokeStyle = `rgba(255, 223, 139, ${haloPulse * 0.4})`;
+    c.lineWidth = 1.5 * s;
+    c.beginPath();
+    c.arc(p.x, p.y - 3 * s, haloRadius, 0, Math.PI * 2);
+    c.stroke();
+
     this.diamond(p.x, p.y, 22 * s, 11 * s, "#779797");
     this.diamond(p.x, p.y - 3 * s, 16 * s, 8 * s, "#b1c8b6");
     c.fillStyle = "#668f85";
@@ -587,6 +597,17 @@ export class Renderer {
             let px = p.x + Math.cos(phase) * this.tw * 0.34,
               py = p.y + Math.sin(phase) * this.th * 0.24 + 4 * s;
             this.villager(px, py, s * 0.85, n * 20 + k * 7, time);
+          }
+          // Glow effect based on population (life energy)
+          if (t.p > 0 && !this.reduced) {
+            const glow = Math.min(1, t.p / 40) * (0.5 + Math.sin(time * 0.7) * 0.2);
+            c.save();
+            c.globalAlpha = glow * 0.3;
+            c.fillStyle = "#add49b";
+            c.beginPath();
+            c.arc(p.x, p.y, this.tw * 0.4 + Math.sin(time * 0.9) * 0.2 * this.tw, 0, Math.PI * 2);
+            c.fill();
+            c.restore();
           }
         }
         if (t.b === "shrine") this.shrine(p, s, time);
