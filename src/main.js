@@ -209,7 +209,7 @@ async function act(index, override) {
       if (error) throw new Error(error);
       persist();
     }
-    renderer.burst(index, power === "rain" ? "#8bc6ed" : "#e1e6a6");
+    renderer.burst(index, power === "rain" ? "#8bc6ed" : "#e1e6a6", power);
     chime();
     update();
   } catch (e) {

@@ -199,21 +199,39 @@ export class Renderer {
     }
     return -1;
   }
-  burst(i, color = "#d4edac") {
+  burst(i, color = "#d4edac", type = "spell") {
     const p = this.project(
       i % SIZE,
       Math.floor(i / SIZE),
       this.getWorld().tiles[i].h,
     );
-    for (let n = 0; n < 16; n++)
-      this.particles.push({
-        x: p.x,
-        y: p.y,
-        vx: (Math.random() - 0.5) * 2,
-        vy: -Math.random() * 2 - 1,
-        life: 1,
-        color,
-      });
+    if (type === "rain") {
+      // Rain falls downward in a gentle shower
+      const radius = this.tw * 1.5;
+      for (let n = 0; n < 24; n++) {
+        const angle = (Math.random() * Math.PI * 2);
+        this.particles.push({
+          x: p.x + Math.cos(angle) * radius * Math.random(),
+          y: p.y - this.th * Math.random() * 2,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: Math.random() * 1.5 + 0.5, // Falls down
+          life: 1,
+          color,
+          size: 0.5 + Math.random() * 0.5,
+        });
+      }
+    } else {
+      // Regular explosion burst (outward and upward)
+      for (let n = 0; n < 16; n++)
+        this.particles.push({
+          x: p.x,
+          y: p.y,
+          vx: (Math.random() - 0.5) * 2,
+          vy: -Math.random() * 2 - 1,
+          life: 1,
+          color,
+        });
+    }
   }
   tree(p, scale, seed, time) {
     const c = this.c;
@@ -672,7 +690,8 @@ export class Renderer {
       p.life -= 0.025;
       c.globalAlpha = Math.max(0, p.life);
       c.fillStyle = p.color;
-      c.fillRect(p.x, p.y, 3, 3);
+      const size = (p.size || 1) * 3; // Rain drops can have custom size
+      c.fillRect(p.x - size / 2, p.y - size / 2, size, size);
       if (p.life <= 0) this.particles.splice(i, 1);
     }
     c.globalAlpha = 1;
