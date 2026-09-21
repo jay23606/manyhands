@@ -548,10 +548,10 @@ export class Renderer {
     // Enable smoothing for softer, less blocky appearance
     c.imageSmoothingEnabled = true;
     c.imageSmoothingQuality = "high";
-    // Steeper angle for easier terrain manipulation + smaller tiles for detail
-    this.tw = Math.min(w / (w < 600 ? 22 : 35), h / 23, 30) * this.zoom;
+    // Very steep top-down angle for terrain precision + micro-tiles for targeting
+    this.tw = Math.min(w / (w < 600 ? 22 : 35), h / 20, 22) * this.zoom;
     this.th = this.tw * 0.5;
-    this.elev = this.tw * 0.36; // Increased from 0.24 for steeper perspective
+    this.elev = this.tw * 0.50; // Steep bird's-eye perspective (from 0.36)
     const s = this.tw / 32;
     for (let y = 0; y < SIZE; y++)
       for (let x = 0; x < SIZE; x++) {
