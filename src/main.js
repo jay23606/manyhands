@@ -126,34 +126,54 @@ function update() {
   const goals = [
     {
       done: homes.some((h) => h.tier >= 2),
+      phase: "growth",
       title: "Make room to grow.",
-      text: "Level a 3 × 3 patch around a home to create a manor.",
+      text: "Your followers build cottages. A civilization awakens.",
     },
     {
       done: s.people >= 40,
+      phase: "growth",
       title: "A people, growing.",
       text: `Grow to 40 followers · ${s.people} / 40`,
     },
     {
       done: s.villages >= 6,
+      phase: "established",
       title: "Beyond the doorstep.",
       text: `Full homes send settlers to new ground · ${s.villages} / 6 homes`,
     },
     {
       done: homes.some((h) => h.tier === 3),
+      phase: "established",
       title: "Build something lasting.",
-      text: "Level a wider 5 × 5 plateau around a manor to raise a citadel.",
+      text: "Manors rise on the horizon. Your influence spreads.",
+    },
+    {
+      done: homes.some((h) => h.tier === 4),
+      phase: "ascendant",
+      title: "Citadels of faith.",
+      text: "The greatest monuments to your vision stand complete.",
     },
     {
       done: s.people >= 100,
+      phase: "ascendant",
       title: "A hundred small lives.",
       text: `Make room for 100 followers · ${s.people} / 100`,
     },
   ];
   const goal = goals.find((g) => !g.done) || {
+    phase: "ascendant",
     title: "A world of your making.",
     text: "Your people are flourishing. Keep shaping their story.",
   };
+
+  // Determine progression phase for title styling
+  let phase = "emerging";
+  if (goals.some((g) => g.done && g.phase === "ascendant")) phase = "ascendant";
+  else if (goals.some((g) => g.done && g.phase === "established")) phase = "established";
+  else if (goals.some((g) => g.done && g.phase === "growth")) phase = "growth";
+
+  $(".world-title").className = `world-title phase-${phase}`;
   $(".world-title h1").textContent = goal.title;
   $("#intro").textContent = goal.text;
   document
