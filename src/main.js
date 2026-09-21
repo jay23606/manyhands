@@ -385,19 +385,30 @@ $("#voice").onclick = async () => {
     );
   }
 };
-function chime() {
+function playTone(frequency, duration = 0.3, volume = 0.035) {
   if (!soundOn || !sound) return;
   const o = sound.createOscillator(),
     g = sound.createGain();
   o.type = "sine";
-  o.frequency.value = [261.63, 329.63, 392, 523.25][
-    Math.floor(Math.random() * 4)
-  ];
-  g.gain.setValueAtTime(0.035, sound.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, sound.currentTime + 0.8);
+  o.frequency.value = frequency;
+  g.gain.setValueAtTime(volume, sound.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, sound.currentTime + duration);
   o.connect(g).connect(sound.destination);
   o.start();
-  o.stop(sound.currentTime + 0.8);
+  o.stop(sound.currentTime + duration);
+}
+
+function chime(type = "action") {
+  if (!soundOn || !sound) return;
+  // Different audio feedback for different game events
+  const tones = {
+    action: [261.63, 329.63, 392, 523.25], // C, E, G, high G (uplifting)
+    settle: [196, 246.94, 293.66, 349.23], // G3, B3, D4, F#4 (settlement)
+    success: [523.25, 659.25, 783.99], // high G, E, G (victory)
+    level: [329.63, 392, 493.88], // E, G, B (level up)
+  };
+  const freqs = tones[type] || tones.action;
+  playTone(freqs[Math.floor(Math.random() * freqs.length)], 0.2, 0.035);
 }
 $("#sound").onclick = async () => {
   sound ??= new AudioContext();
