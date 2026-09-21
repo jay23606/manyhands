@@ -155,15 +155,12 @@ export class Renderer {
     const cx = SIZE / 2, cy = SIZE / 2;
     let rx = x, ry = y;
 
-    // Orbital camera: translate view as if camera orbits the island
+    // Rotate grid around Y-axis (vertical)
     if (this.rotation) {
-      // Camera orbits at a radius from the isometric center
-      // This creates circular pan motion that looks like the camera moving around the island
-      const r = SIZE / 4; // Orbital radius
-      const ox = r * Math.cos(this.rotation);
-      const oy = r * Math.sin(this.rotation);
-      rx = x + ox;
-      ry = y + oy;
+      const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
+      const dx = x - cx, dy = y - cy;
+      rx = cx + dx * cos - dy * sin;
+      ry = cy + dx * sin + dy * cos;
     }
 
     const px = this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x;
