@@ -153,25 +153,20 @@ export class Renderer {
   }
   project(x, y, h = 0) {
     const cx = SIZE / 2, cy = SIZE / 2;
-    const dx = x - cx, dy = y - cy;
+    let rx = x, ry = y;
 
-    let iso_x, iso_y;
+    // Rotate grid around Y-axis (vertical)
     if (this.rotation) {
-      // Rotate isometric basis vectors to match grid rotation
-      const c = Math.cos(this.rotation), s = Math.sin(this.rotation);
-      // Rotated isometric right (1,-1): (c+s, s-c)
-      // Rotated isometric down (1,1): (c-s, s+c)
-      iso_x = (c + s) * dx + (c - s) * dy;
-      iso_y = (s - c) * dx + (s + c) * dy;
-    } else {
-      iso_x = dx - dy;
-      iso_y = dx + dy;
+      const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
+      const dx = x - cx, dy = y - cy;
+      rx = cx + dx * cos - dy * sin;
+      ry = cy + dx * sin + dy * cos;
     }
 
-    const px = this.w / 2 + (iso_x * this.tw) / 2 + this.pan.x;
+    const px = this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x;
     const py =
       this.h * 0.48 +
-      ((cy + iso_y - SIZE / 2 + 1) * this.th) / 2 -
+      ((rx + ry - SIZE + 1) * this.th) / 2 -
       h * this.elev +
       this.pan.y;
 
