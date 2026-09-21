@@ -517,9 +517,13 @@ export class Renderer {
     g.addColorStop(1, "#071d2b");
     c.fillStyle = g;
     c.fillRect(0, 0, w, h);
-    this.tw = Math.min(w / (w < 600 ? 22 : 35), h / 23, 36) * this.zoom;
+    // Enable smoothing for softer, less blocky appearance
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = "high";
+    // Steeper angle for easier terrain manipulation + smaller tiles for detail
+    this.tw = Math.min(w / (w < 600 ? 22 : 35), h / 23, 30) * this.zoom;
     this.th = this.tw * 0.5;
-    this.elev = this.tw * 0.24;
+    this.elev = this.tw * 0.36; // Increased from 0.24 for steeper perspective
     const s = this.tw / 32;
     for (let y = 0; y < SIZE; y++)
       for (let x = 0; x < SIZE; x++) {
