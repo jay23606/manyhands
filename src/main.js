@@ -32,6 +32,7 @@ import {
   stats,
   housing,
   COST,
+  checkDisasters,
 } from "./world.js";
 import { Renderer } from "./render.js";
 import { Network } from "./network.js";
@@ -97,6 +98,7 @@ $("#app").innerHTML =
 <dialog id="help-dialog"><button class="close icon-button" data-close aria-label="Close">${icon("X")}</button><div class="eyebrow">A LITTLE GUIDANCE</div><h2>Let the world grow.</h2><p>You shape the land. Your people find their own way.</p><div class="guide-row">${icon("Mountain")}<div><strong>Make room</strong><p>Raise the sea into land. Flat land upgrades homes: hut → cottage → manor → citadel. You can sculpt beneath buildings; lowering them into the sea floods them.</p></div></div><div class="guide-row">${icon("House")}<div><strong>Give life a home</strong><p>Full homes send settlers to suitable nearby land. Make clear, level ground and gentle routes for them. Larger homes grow faster.</p></div></div><div class="guide-row">${icon("Sun")}<div><strong>Gather faith</strong><p>More followers mean more faith. Shrines replenish it faster. Bless an area to help its people grow.</p></div></div><div class="guide-row">${icon("Users")}<div><strong>Leave your mark</strong><p>Shared islands keep changing while anyone is present. Voice is optional. Everyone with voice enabled on the same island can hear each other.</p></div></div><p class="fine">Left-click or drag uses your selected power. Right-click or drag lowers land. Hold Space and drag to pan. On mobile, select a power and paint with one finger; use two fingers to pan and pinch to zoom. Keys 1–6 choose a power. + / − zoom. 0 centers the island. Escape closes a window. Local islands pause when their tab is hidden.</p><button class="primary" data-close>Back to the island</button></dialog>`;
 const refreshIcons = () => createIcons({ icons });
 refreshIcons();
+let lastEventAge = -1;
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").classList.add("show");
@@ -120,6 +122,10 @@ function update() {
   $("#faith-fill").style.width = (world.mana / 120) * 100 + "%";
   $("#age").textContent = "Day " + (world.age + 1);
   $("#event").textContent = world.events[0]?.text || "The island is waking.";
+  if (world.events[0]?.age !== lastEventAge && /☄️|🦠|🏜️/.test(world.events[0]?.text)) {
+    chime("disaster");
+    lastEventAge = world.events[0]?.age;
+  }
   const homes = world.tiles
     .map((t, i) => (t.b === "village" ? housing(world, i) : null))
     .filter(Boolean);
@@ -271,6 +277,7 @@ window.addEventListener("keydown", (e) => {
 setInterval(() => {
   if (!online && !joining && !document.hidden) {
     stepWorld(world);
+    checkDisasters(world);
     update();
     persist();
   }
@@ -406,9 +413,12 @@ function chime(type = "action") {
     settle: [196, 246.94, 293.66, 349.23], // G3, B3, D4, F#4 (settlement)
     success: [523.25, 659.25, 783.99], // high G, E, G (victory)
     level: [329.63, 392, 493.88], // E, G, B (level up)
+    disaster: [130.81, 146.83], // C3, D3 (ominous warning)
   };
   const freqs = tones[type] || tones.action;
-  playTone(freqs[Math.floor(Math.random() * freqs.length)], 0.2, 0.035);
+  const duration = type === "disaster" ? 0.4 : 0.2;
+  const volume = type === "disaster" ? 0.05 : 0.035;
+  playTone(freqs[Math.floor(Math.random() * freqs.length)], duration, volume);
 }
 $("#sound").onclick = async () => {
   sound ??= new AudioContext();

@@ -25,6 +25,42 @@ export function getFollowerName(worldAge, index1, index2 = 0) {
   return FIRST_NAMES[Math.abs(Math.floor(seed)) % FIRST_NAMES.length];
 }
 
+// Phase 2: Disaster events (random challenges that threaten settlements)
+export const DISASTERS = {
+  meteor: { name: "Meteor strike", damage: 0.5, emoji: "☄️" },
+  plague: { name: "Plague spreads", damage: 0.3, emoji: "🦠" },
+  drought: { name: "Drought withers crops", damage: 0.25, emoji: "🏜️" },
+};
+
+/**
+ * Check for random disaster and apply to a settlement
+ * Low chance (~2% per settlement per tick)
+ */
+export function checkDisasters(world) {
+  if (world.age % 4 !== 0) return; // Check every 4 ticks
+  const villages = world.tiles.filter((t, i) => t.b === "village" && t.p > 0);
+  if (villages.length === 0) return;
+
+  // ~2% chance per village per check
+  for (const tile of villages) {
+    if (Math.random() > 0.02) continue;
+
+    const disasterKeys = Object.keys(DISASTERS);
+    const disaster = DISASTERS[disasterKeys[Math.floor(Math.random() * disasterKeys.length)]];
+    const lost = Math.max(1, Math.ceil(tile.p * disaster.damage));
+    tile.p = Math.max(0, tile.p - lost);
+
+    const idx = world.tiles.indexOf(tile);
+    world.events = [
+      {
+        text: `${disaster.emoji} ${disaster.name} strikes! ${lost} settlers lost.`,
+        age: world.age,
+      },
+      ...world.events,
+    ].slice(0, 12);
+  }
+}
+
 export function noise(x, y) {
   return (((Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1) + 1) % 1;
 }
