@@ -7,6 +7,24 @@ export const COST = {
   shrine: 20,
   rain: 10,
 };
+
+// Phase 2: Follower names (deterministic, persists across saves)
+const FIRST_NAMES = [
+  "Aela", "Beran", "Cade", "Dalia", "Emyr", "Faye", "Gavin", "Hera",
+  "Ione", "Joren", "Kess", "Lena", "Maren", "Noel", "Orrin", "Piper",
+  "Quin", "Rune", "Sara", "Tor", "Una", "Vale", "Wren", "Xander",
+  "Yara", "Zephyr",
+];
+
+/**
+ * Get follower name from deterministic seed (same across reloads)
+ * Used for settlers: getFollowerName(worldAge, tileIndex, positionInTile)
+ */
+export function getFollowerName(worldAge, index1, index2 = 0) {
+  const seed = (worldAge * 73 + index1 * 97 + index2 * 37) * 43758.5453;
+  return FIRST_NAMES[Math.abs(Math.floor(seed)) % FIRST_NAMES.length];
+}
+
 export function noise(x, y) {
   return (((Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1) + 1) % 1;
 }

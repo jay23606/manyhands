@@ -1,4 +1,4 @@
-import { SIZE, noise, housing } from "./world.js";
+import { SIZE, noise, housing, getFollowerName } from "./world.js";
 export class Renderer {
   constructor(canvas, getWorld, onPick) {
     this.canvas = canvas;
@@ -640,21 +640,26 @@ export class Renderer {
           const f = this.reduced
             ? 1
             : Math.min(1, (time - this.tickStarted) / 3.5);
-          this.villager(
-            a.x + (p.x - a.x) * f,
-            a.y + (p.y - a.y) * f,
-            s,
-            walker.home * 0.71,
-            time,
-          );
+          const wx = a.x + (p.x - a.x) * f,
+            wy = a.y + (p.y - a.y) * f;
+          this.villager(wx, wy, s, walker.home * 0.71, time);
+
+          // Show settler name above the migrating group (Phase 2)
+          // Generate name deterministically from walker identity
+          if (!this.reduced) {
+            const name = getFollowerName(world.age, walker.home, walker.from);
+            c.font = `${Math.round(s * 3)}px DM Sans`;
+            c.fillStyle = "#c9e4ca99";
+            c.textAlign = "center";
+            c.textBaseline = "bottom";
+            c.fillText(name, wx, wy - s * 4);
+          }
+
           c.strokeStyle = "#dbd89e";
           c.lineWidth = s;
           c.beginPath();
-          c.moveTo(a.x + (p.x - a.x) * f + 4 * s, a.y + (p.y - a.y) * f);
-          c.lineTo(
-            a.x + (p.x - a.x) * f + 4 * s,
-            a.y + (p.y - a.y) * f - 16 * s,
-          );
+          c.moveTo(wx + 4 * s, wy);
+          c.lineTo(wx + 4 * s, wy - 16 * s);
           c.stroke();
         }
         if (i === this.hover) {
