@@ -33,6 +33,7 @@ import {
   housing,
   COST,
   checkDisasters,
+  rally,
 } from "./world.js";
 import { Renderer } from "./render.js";
 import { Network } from "./network.js";
@@ -99,6 +100,7 @@ $("#app").innerHTML =
 const refreshIcons = () => createIcons({ icons });
 refreshIcons();
 let lastEventAge = -1;
+let rallyMode = null;
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").classList.add("show");
@@ -204,6 +206,46 @@ const network = new Network(
 );
 async function act(index, override) {
   if (index < 0 || acting || joining) return;
+
+  // Handle rally mode
+  if (rallyMode === true) {
+    const source = world.tiles[index];
+    if (source?.b !== "village" || source.p <= 1) {
+      toast("Select a settlement with people to rally");
+      return;
+    }
+    rallyMode = index;
+    toast("Rally target: click empty flat land");
+    renderer.burst(index, "#ff6b6b", "rally");
+    selected = index;
+    network.setPosition(index % 28, Math.floor(index / 28));
+    return;
+  }
+
+  if (typeof rallyMode === "number") {
+    const dest = world.tiles[index];
+    if (!dest || dest.h < 0 || dest.b === "village" || dest.tree) {
+      toast("Rally to flat, empty ground only");
+      return;
+    }
+    selected = index;
+    network.setPosition(index % 28, Math.floor(index / 28));
+    acting = true;
+    try {
+      rally(world, rallyMode, index);
+      renderer.burst(index, "#ffb84d", "rally");
+      chime("success");
+      rallyMode = null;
+      update();
+      persist();
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      acting = false;
+    }
+    return;
+  }
+
   const power = override || tool;
   selected = index;
   network.setPosition(index % 28, Math.floor(index / 28));
@@ -273,6 +315,10 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "+" || e.key === "=") $("#zoom-in").click();
   if (e.key === "-") $("#zoom-out").click();
   if (e.key === "0") renderer.reset();
+  if (e.key === "r" || e.key === "R") {
+    rallyMode = rallyMode ? null : true;
+    toast(rallyMode ? "Rally mode: click a settlement to send settlers" : "Rally cancelled");
+  }
 });
 setInterval(() => {
   if (!online && !joining && !document.hidden) {

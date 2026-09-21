@@ -292,3 +292,62 @@ export function stats(w) {
     trees: w.tiles.filter((t) => t.tree).length,
   };
 }
+
+/**
+ * Rally: direct settlers from source settlement to destination tile
+ * Moves half the population, or up to 8 if it's a large settlement
+ * Returns true if successful, false if source isn't a village
+ */
+export function rally(world, sourceIdx, destIdx) {
+  const source = world.tiles[sourceIdx];
+  if (source.b !== "village" || source.p <= 1) return false;
+
+  const dest = world.tiles[destIdx];
+  if (!dest) return false;
+
+  const toSend = Math.min(Math.ceil(source.p / 2), 8);
+  source.p -= toSend;
+
+  const path = rallyPath(world, sourceIdx, destIdx);
+  if (!path) {
+    source.p += toSend;
+    return false;
+  }
+
+  world.walkers.push({ at: sourceIdx, from: sourceIdx, home: sourceIdx, path, p: toSend, wait: 0, rally: true });
+  world.events = [
+    { text: `⚔️ Rally! ${toSend} settlers march forth.`, age: world.age },
+    ...world.events,
+  ].slice(0, 12);
+  return true;
+}
+
+/**
+ * Find path from start tile to end tile (for rally command)
+ * Modified version of settlementPath that targets a specific destination
+ */
+export function rallyPath(world, start, end) {
+  const queue = [[start, []]],
+    visited = new Set([start]);
+  for (let head = 0; head < queue.length; head++) {
+    const [at, path] = queue[head];
+    if (at === end) return path;
+
+    const x = at % SIZE,
+      y = Math.floor(at / SIZE);
+    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+      const nx = x + dx,
+        ny = y + dy,
+        next = ny * SIZE + nx;
+      if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
+      if (visited.has(next)) continue;
+
+      const t = world.tiles[next];
+      if (t.h < 0) continue;
+      visited.add(next);
+      queue.push([next, [...path, next]]);
+    }
+  }
+  return null;
+}
+
