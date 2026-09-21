@@ -285,7 +285,7 @@ function setTool(id) {
   $("#hint").innerHTML = matchMedia("(pointer: coarse)").matches
     ? "One finger paints <span>·</span> Two fingers move & zoom"
     : labels[id] +
-      " <span>·</span> Right-click lowers <span>·</span> Space-drag pans";
+      " <span>·</span> Right-click lowers <span>·</span> Space-drag pans <span>·</span> Arrow keys rotate";
 }
 document
   .querySelectorAll("[data-tool]")
@@ -319,6 +319,12 @@ window.addEventListener("keydown", (e) => {
     rallyMode = rallyMode ? null : true;
     toast(rallyMode ? "Rally mode: click a settlement to send settlers" : "Rally cancelled");
   }
+  if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A")
+    renderer.rotation -= 0.1;
+  if (e.key === "ArrowRight" || e.key === "d" || e.key === "D")
+    renderer.rotation += 0.1;
+  if (e.key === "ArrowUp" || e.key === "w" || e.key === "W")
+    renderer.rotation = 0;
 });
 setInterval(() => {
   if (!online && !joining && !document.hidden) {

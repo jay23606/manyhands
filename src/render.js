@@ -7,6 +7,7 @@ export class Renderer {
     this.onPick = onPick;
     this.zoom = 1;
     this.pan = { x: 0, y: 0 };
+    this.rotation = 0;
     this.hover = -1;
     this.particles = [];
     this.pointer = { x: 0, y: 0 };
@@ -151,11 +152,16 @@ export class Renderer {
     this.raf = requestAnimationFrame(this.frame);
   }
   project(x, y, h = 0) {
+    const cx = SIZE / 2, cy = SIZE / 2;
+    const dx = x - cx, dy = y - cy;
+    const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
+    const rx = cx + dx * cos - dy * sin;
+    const ry = cy + dx * sin + dy * cos;
     return {
-      x: this.w / 2 + ((x - y) * this.tw) / 2 + this.pan.x,
+      x: this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x,
       y:
         this.h * 0.48 +
-        ((x + y - SIZE + 1) * this.th) / 2 -
+        ((rx + ry - SIZE + 1) * this.th) / 2 -
         h * this.elev +
         this.pan.y,
     };
