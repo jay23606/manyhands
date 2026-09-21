@@ -151,17 +151,28 @@ export class Renderer {
     };
     this.raf = requestAnimationFrame(this.frame);
   }
-  project(x, y, h = 0) {
-    const cx = SIZE / 2, cy = SIZE / 2;
-    let rx = x, ry = y;
-
-    // Rotate grid around Y-axis (vertical)
-    if (this.rotation) {
-      const cos = Math.cos(this.rotation), sin = Math.sin(this.rotation);
-      const dx = x - cx, dy = y - cy;
-      rx = cx + dx * cos - dy * sin;
-      ry = cy + dx * sin + dy * cos;
+  // Quarter-turn rotation about the vertical axis. Integer-exact so tiles stay
+  // on the grid and keep interlocking; any other angle breaks the fixed diamonds.
+  rotate(x, y) {
+    const m = SIZE - 1;
+    switch (this.rotation & 3) {
+      case 1: return [y, m - x];
+      case 2: return [m - x, m - y];
+      case 3: return [m - y, x];
+      default: return [x, y];
     }
+  }
+  unrotate(rx, ry) {
+    const m = SIZE - 1;
+    switch (this.rotation & 3) {
+      case 1: return [m - ry, rx];
+      case 2: return [m - rx, m - ry];
+      case 3: return [ry, m - rx];
+      default: return [rx, ry];
+    }
+  }
+  project(x, y, h = 0) {
+    const [rx, ry] = this.rotate(x, y);
 
     const px = this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x;
     const py =
@@ -200,15 +211,19 @@ export class Renderer {
   pick(x, y) {
     if (!this.tw) return -1;
     const world = this.getWorld();
-    for (let i = world.tiles.length - 1; i >= 0; i--) {
-      const t = world.tiles[i],
-        p = this.project(i % SIZE, Math.floor(i / SIZE), t.h);
-      if (
-        Math.abs(x - p.x) / (this.tw / 2) + Math.abs(y - p.y) / (this.th / 2) <
-        1
-      )
-        return i;
-    }
+    // Front-to-back in the ROTATED view, mirroring the draw order.
+    for (let ry = SIZE - 1; ry >= 0; ry--)
+      for (let rx = SIZE - 1; rx >= 0; rx--) {
+        const [gx, gy] = this.unrotate(rx, ry);
+        const i = gy * SIZE + gx,
+          p = this.project(gx, gy, world.tiles[i].h);
+        if (
+          Math.abs(x - p.x) / (this.tw / 2) +
+            Math.abs(y - p.y) / (this.th / 2) <
+          1
+        )
+          return i;
+      }
     return -1;
   }
   burst(i, color = "#d4edac", type = "spell") {
@@ -565,8 +580,11 @@ export class Renderer {
     this.th = this.tw * 0.5;
     this.elev = this.tw * 0.50; // Steep bird's-eye perspective (from 0.36)
     const s = this.tw / 32;
-    for (let y = 0; y < SIZE; y++)
-      for (let x = 0; x < SIZE; x++) {
+    // Walk the ROTATED grid back-to-front so the painter's algorithm stays correct
+    // at every quarter turn, then map back to the source tile.
+    for (let ry = 0; ry < SIZE; ry++)
+      for (let rx = 0; rx < SIZE; rx++) {
+        const [x, y] = this.unrotate(rx, ry);
         const i = y * SIZE + x,
           t = world.tiles[i],
           p = this.project(x, y, t.h),

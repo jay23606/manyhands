@@ -295,8 +295,8 @@ $("#zoom-in").onclick = () =>
 $("#zoom-out").onclick = () =>
   (renderer.zoom = Math.max(0.55, renderer.zoom / 1.2));
 $("#recenter").onclick = () => renderer.reset();
-$("#rotate-left").onclick = () => (renderer.rotation -= 0.2);
-$("#rotate-right").onclick = () => (renderer.rotation += 0.2);
+$("#rotate-left").onclick = () => (renderer.rotation -= 1);
+$("#rotate-right").onclick = () => (renderer.rotation += 1);
 $("#rally-toggle").onclick = () => {
   rallyMode = rallyMode ? null : true;
   $("#rally-toggle").setAttribute("aria-pressed", rallyMode ? "true" : "false");
@@ -327,9 +327,9 @@ window.addEventListener("keydown", (e) => {
     toast(rallyMode ? "Rally mode: click a settlement to send settlers" : "Rally cancelled");
   }
   if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A")
-    renderer.rotation -= 0.1;
+    renderer.rotation -= 1;
   if (e.key === "ArrowRight" || e.key === "d" || e.key === "D")
-    renderer.rotation += 0.1;
+    renderer.rotation += 1;
   if (e.key === "ArrowUp" || e.key === "w" || e.key === "W")
     renderer.rotation = 0;
 });
