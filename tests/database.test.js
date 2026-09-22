@@ -62,6 +62,12 @@ test("database permissions, actions, tick rate and no offline catch-up", async (
     stepWorld(local);
     assert.deepEqual(s, local, `tick ${n}`);
   }
+  const source = s.tiles.findIndex(
+    (t) => t.b === "village" && (t.owner || "hands") === "hands" && t.p > 1,
+  );
+  const target = s.tiles.findIndex((t) => !t.b && !t.tree && t.h >= 2);
+  s = await call(`select public.mh_rally_world('test',${source},${target}) s`);
+  assert.ok(s.walkers.some((w) => w.rally && w.owner === "hands"));
   await db.exec(
     `reset role; set request.jwt.claim.sub='22222222-2222-4222-8222-222222222222'; set role authenticated;`,
   );

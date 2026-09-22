@@ -120,6 +120,17 @@ export class Network {
     this.onWorld(data);
     this.channel.send({ type: "broadcast", event: "changed", payload: {} });
   }
+  async rally(source, target) {
+    if (!navigator.onLine) throw new Error("You are offline. Shared rallies need a connection.");
+    const { data, error } = await this.client.rpc("mh_rally_world", {
+      room_name: this.room,
+      source_index: source,
+      target_index: target,
+    });
+    if (error) throw new Error(error.message);
+    this.onWorld(data);
+    this.channel.send({ type: "broadcast", event: "changed", payload: {} });
+  }
   async track() {
     if (this.channel)
       await this.channel.track({

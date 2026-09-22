@@ -93,6 +93,25 @@ begin
  return null;
 end; $$;
 
+-- A bounded breadth-first route for player-issued rallies. It may end on an
+-- occupied enemy village, unlike mh_settle_path which seeks empty ground.
+create or replace function public.mh_rally_path(tiles jsonb, start_index int, end_index int) returns jsonb language plpgsql immutable set search_path = '' as $$
+declare queue int[]:=array[start_index]; paths jsonb:=jsonb_build_object(start_index::text,'[]'::jsonb); head int:=1; at_index int; path jsonb; x int; y int; nx int; ny int; n int; dx int; dy int; d int; t jsonb; q jsonb;
+begin
+ while head<=cardinality(queue) loop
+  at_index:=queue[head]; head:=head+1; path:=paths->at_index::text;
+  if at_index=end_index then return path; end if;
+  x:=at_index%28;y:=at_index/28;t:=tiles->at_index;
+  for d in 0..3 loop
+   dx:=case d when 0 then 0 when 1 then 1 when 2 then 0 else -1 end;dy:=case d when 0 then 1 when 2 then -1 else 0 end;nx:=x+dx;ny:=y+dy;
+   if nx<0 or nx>=28 or ny<0 or ny>=28 then continue; end if;
+   n:=ny*28+nx;q:=tiles->n;
+   if not paths ? n::text and (q->>'h')::int>0 then queue:=array_append(queue,n);paths:=paths||jsonb_build_object(n::text,path||to_jsonb(n)); end if;
+  end loop;
+ end loop;
+ return null;
+end; $$;
+
 create or replace function public.mh_step_world(room_name text) returns jsonb language plpgsql security definer set search_path = '' as $$
 declare s jsonb; last_time timestamptz; ts jsonb; t jsonb; q jsonb; age int; shrines int:=0; i int; population int; total_people int:=0; capacity int; tier int; walkers jsonb; next_walkers jsonb:='[]'; walker jsonb; path jsonb; at_index int; next_index int; home_index int; waits int; ev jsonb; hands_people int; rival_people int; hands_villages int; rival_villages int; target int; site int:=-1; last_expansion int; attacker_owner text; defenders int; citadel boolean;
 begin
@@ -226,8 +245,30 @@ begin
   return s;
 end; $$;
 
+create or replace function public.mh_rally_world(room_name text, source_index int, target_index int) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare s jsonb; ts jsonb; source jsonb; target jsonb; path jsonb; sent int; ev jsonb;
+begin
+  if auth.uid() is null then raise exception 'Sign in first.'; end if;
+  if not exists(select 1 from public.mh_visitors where world_name=room_name and user_id=auth.uid()) then raise exception 'Enter this island first.'; end if;
+  if source_index<0 or source_index>783 or target_index<0 or target_index>783 then raise exception 'Choose a valid rally route.'; end if;
+  select state into s from public.mh_worlds where name=room_name for update;
+  if s ? 'winner' then raise exception 'This war is already over.'; end if;
+  ts:=s->'tiles';source:=ts->source_index;target:=ts->target_index;
+  if source->>'b'<>'village' or coalesce(source->>'owner','hands')<>'hands' or (source->>'p')::int<=1 then raise exception 'Select one of your settlements with people.'; end if;
+  if (target->>'h')::int=0 or (target->>'tree')::boolean or (target->>'b'='village' and target->>'owner'<>'rival') then raise exception 'Rally to empty ground or a rival settlement.'; end if;
+  if target->>'owner'='rival' and coalesce(s->'rival'->>'phase','watching')<>'contested' then raise exception 'The rival is still beyond reach.'; end if;
+  path:=public.mh_rally_path(ts,source_index,target_index); if path is null then raise exception 'No route reaches that place.'; end if;
+  sent:=least(ceil((source->>'p')::numeric/2)::int,8);
+  ts:=jsonb_set(ts,array[source_index::text,'p'],to_jsonb((source->>'p')::int-sent));
+  ev:=jsonb_build_array(jsonb_build_object('text',case when target->>'b'='village' then format('⚔️ Rally! %s settlers march to battle.',sent) else format('⚔️ Rally! %s settlers march forth.',sent) end,'age',(s->>'age')::int)) || (s->'events');
+  select jsonb_agg(value) into ev from (select value from jsonb_array_elements(ev) with ordinality e(value,n) order by n limit 12) recent;
+  s:=s||jsonb_build_object('tiles',ts,'walkers',coalesce(s->'walkers','[]'::jsonb)||jsonb_build_array(jsonb_build_object('at',source_index,'from',source_index,'home',source_index,'path',path,'p',sent,'wait',0,'rally',true,'owner','hands')),'events',ev,'version',(s->>'version')::int+1);
+  update public.mh_worlds set state=s where name=room_name; return s;
+end; $$;
+
 revoke all on function public.mh_seed() from public;
 revoke all on function public.mh_capacity(jsonb,int) from public;
 revoke all on function public.mh_settle_path(jsonb,int,jsonb) from public;
-revoke all on function public.mh_enter_world(text), public.mh_read_world(text), public.mh_step_world(text), public.mh_edit_world(text,text,int) from public;
-grant execute on function public.mh_enter_world(text), public.mh_read_world(text), public.mh_step_world(text), public.mh_edit_world(text,text,int) to authenticated;
+revoke all on function public.mh_rally_path(jsonb,int,int) from public;
+revoke all on function public.mh_enter_world(text), public.mh_read_world(text), public.mh_step_world(text), public.mh_edit_world(text,text,int), public.mh_rally_world(text,int,int) from public;
+grant execute on function public.mh_enter_world(text), public.mh_read_world(text), public.mh_step_world(text), public.mh_edit_world(text,text,int), public.mh_rally_world(text,int,int) to authenticated;

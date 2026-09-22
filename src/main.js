@@ -257,7 +257,8 @@ async function act(index, override) {
     network.setPosition(index % 28, Math.floor(index / 28));
     acting = true;
     try {
-      rally(world, rallyMode, index);
+      if (online) await network.rally(rallyMode, index);
+      else rally(world, rallyMode, index);
       renderer.burst(index, "#ffb84d", "rally");
       chime("success");
       rallyMode = null;
