@@ -95,6 +95,21 @@ export function makeWorld() {
     t.tree = false;
     t.b = "village";
     t.p = 5;
+    t.owner = "hands";
+  }
+  // The rival starts on the far shore. It uses the same terrain rules, but its
+  // growth is driven by the hands currently shaping this world.
+  for (const [x, y] of [
+    [21, 12],
+    [17, 17],
+    [20, 18],
+  ]) {
+    const t = tiles[y * SIZE + x];
+    t.h = 3;
+    t.tree = false;
+    t.b = "village";
+    t.p = 5;
+    t.owner = "rival";
   }
   return {
     tiles,
@@ -102,6 +117,7 @@ export function makeWorld() {
     age: 0,
     version: 0,
     walkers: [],
+    rival: { phase: "watching", lastExpansion: 0 },
     events: [{ text: "Three settlements look to the sky.", age: 0 }],
   };
 }
@@ -130,6 +146,7 @@ export function applyAction(world, type, index) {
   if (type === "village") {
     t.b = "village";
     t.p = 3;
+    t.owner = "hands";
   }
   if (type === "shrine") t.b = "shrine";
   if (type === "rain")
@@ -186,6 +203,7 @@ export function stepWorld(world) {
     if (!target.b && !target.tree && target.h >= 2) {
       target.b = "village";
       target.p = w.p;
+      target.owner = w.owner || "hands";
       world.events = [
         { text: "Settlers found a new home.", age: world.age },
         ...world.events,
@@ -198,17 +216,63 @@ export function stepWorld(world) {
   });
   if (world.age % 3 === 0)
     world.tiles.forEach((t, i) => {
-      if (t.b !== "village") return;
+      if (t.b !== "village" || t.owner === "rival") return;
       const home = housing(world, i);
       t.p = Math.min(home.capacity, t.p + home.tier + 1);
       if (t.p >= home.capacity) {
         const path = settlementPath(world, i);
         if (path) {
           t.p -= 4;
-          world.walkers.push({ at: i, from: i, home: i, path, p: 4, wait: 0 });
+          world.walkers.push({ at: i, from: i, home: i, path, p: 4, wait: 0, owner: "hands" });
         }
       }
     });
+  stepRival(world);
+}
+
+/** Let the computer civilization keep close to the active players' progress. */
+export function stepRival(world) {
+  world.rival ??= { phase: "watching", lastExpansion: 0 };
+  const hands = sideStats(world, "hands");
+  const rival = sideStats(world, "rival");
+  const homes = world.tiles
+    .map((t, i) => (t.b === "village" && t.owner === "rival" ? [t, i] : null))
+    .filter(Boolean);
+  const target = Math.max(15, Math.round(hands.people * 0.9 + 4));
+  if (world.age % 3 === 0 && rival.people < target) {
+    for (const [home, index] of homes) {
+      if (sideStats(world, "rival").people >= target) break;
+      home.p = Math.min(housing(world, index).capacity, home.p + 1);
+    }
+  }
+  // A new rival home appears only after the players establish another one.
+  if (hands.villages > rival.villages && world.age - world.rival.lastExpansion >= 9) {
+    const site = rivalSite(world);
+    if (site !== -1) {
+      const t = world.tiles[site];
+      t.b = "village";
+      t.p = 3;
+      t.tree = false;
+      t.owner = "rival";
+      world.rival.lastExpansion = world.age;
+      world.events = [{ text: "Across the water, another rival banner rises.", age: world.age }, ...world.events].slice(0, 12);
+    }
+  }
+  const updated = sideStats(world, "rival");
+  if (hands.villages >= 6 && updated.villages >= 6 && world.rival.phase === "watching") {
+    world.rival.phase = "contested";
+    world.events = [{ text: "The two civilizations can see each other. Prepare your people.", age: world.age }, ...world.events].slice(0, 12);
+  }
+}
+
+function rivalSite(world) {
+  // Search inward from the rival shore so the two civilizations eventually meet.
+  for (let x = SIZE - 4; x >= Math.floor(SIZE / 2); x--)
+    for (let y = 3; y < SIZE - 3; y++) {
+      const i = y * SIZE + x, t = world.tiles[i];
+      if (!t.b && !t.tree && t.h >= 2 && housing(world, i).near >= 5) return i;
+    }
+  return -1;
 }
 export function settlementPath(world, start) {
   const queue = [[start, []]],
@@ -284,11 +348,14 @@ export function housing(world, index) {
   };
 }
 export function stats(w) {
+  return sideStats(w, "hands");
+}
+export function sideStats(w, owner) {
   return {
     people:
-      w.tiles.reduce((n, t) => n + t.p, 0) +
-      (w.walkers || []).reduce((n, t) => n + t.p, 0),
-    villages: w.tiles.filter((t) => t.b === "village").length,
+      w.tiles.reduce((n, t) => n + ((t.owner || "hands") === owner ? t.p : 0), 0) +
+      (w.walkers || []).reduce((n, t) => n + ((t.owner || "hands") === owner ? t.p : 0), 0),
+    villages: w.tiles.filter((t) => t.b === "village" && (t.owner || "hands") === owner).length,
     trees: w.tiles.filter((t) => t.tree).length,
   };
 }
@@ -314,7 +381,7 @@ export function rally(world, sourceIdx, destIdx) {
     return false;
   }
 
-  world.walkers.push({ at: sourceIdx, from: sourceIdx, home: sourceIdx, path, p: toSend, wait: 0, rally: true });
+  world.walkers.push({ at: sourceIdx, from: sourceIdx, home: sourceIdx, path, p: toSend, wait: 0, rally: true, owner: "hands" });
   world.events = [
     { text: `⚔️ Rally! ${toSend} settlers march forth.`, age: world.age },
     ...world.events,

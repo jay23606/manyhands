@@ -699,6 +699,23 @@ export class Renderer {
         if (t.tree) this.tree(p, s, n * 20, time);
         if (t.b === "village") {
           this.house(p, s, t, time, housing(world, i).tier);
+          if (t.owner === "rival") {
+            // A compact crimson pennant makes the computer civilization legible
+            // from either camera without replacing the shared terrain language.
+            c.strokeStyle = "#ead0a0";
+            c.lineWidth = Math.max(1, s);
+            c.beginPath();
+            c.moveTo(p.x + 6 * s, p.y - 7 * s);
+            c.lineTo(p.x + 6 * s, p.y - 22 * s);
+            c.stroke();
+            c.fillStyle = "#b85d58";
+            c.beginPath();
+            c.moveTo(p.x + 6 * s, p.y - 22 * s);
+            c.lineTo(p.x + 16 * s, p.y - 19 * s);
+            c.lineTo(p.x + 6 * s, p.y - 16 * s);
+            c.closePath();
+            c.fill();
+          }
           for (let k = 0; k < Math.min(4, Math.ceil(t.p / 4)); k++) {
             let phase = this.reduced ? k : time * 0.25 + k * 2 + n * 6;
             let px = p.x + Math.cos(phase) * this.tw * 0.34,

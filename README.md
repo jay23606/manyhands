@@ -10,6 +10,7 @@ A small world, shaped together. A minimalist isometric god-game prototype for th
 - Right-click or drag always lowers terrain.
 - Hold Space and drag (or middle-drag) to pan; scroll to zoom; `0` recenters.
 - Use the **2D** control (or `V`) for a square-tile top-down map when you need to sculpt a crowded area precisely; press **3D** to return to the normal isometric view.
+- Use **Watch rival** to inspect the computer civilization. Its crimson-bannered settlements grow in response to the hands active on your island; once both civilizations are established, the world enters a contested phase.
 - On mobile, choose Raise/Lower and paint with one finger. Two fingers pan and pinch to zoom.
 - Keys `1`–`6` select Raise, Lower, Forest, Settle, Shrine, and Bless.
 - Level land upgrades huts into cottages, manors, and citadels. Larger homes grow faster; full homes send visible settlers along walkable paths to clear level ground. More followers and shrines generate more faith.
@@ -82,4 +83,4 @@ Structure draws on Worktrade's modular static/PWA approach and Netquake's Vite +
 
 `npm test` exercises simulation rules and the actual SQL schema in embedded Postgres (PGlite), including table permissions, invalid edits, tick throttling, persistence across visitors, and no offline catch-up. `npm run test:browser` uses Playwright with Edge against a dev server on port 5173 for terrain interactions, mouse/touch controls, mobile layout, setup flows, and a real two-peer WebRTC audio negotiation using foyer with local signaling.
 
-This is a playable prototype, not a complete civilization simulator: there is no rival AI, combat, diplomacy, trade, public island directory, or moderation system yet. The current progression includes settlement growth, migration, building upgrades, rallying settlers, and hazards. Without a configured Supabase project, cross-device persistence and real-network voice cannot be end-to-end verified. The SQL tests do not substitute for that deployment check.
+This is a playable prototype, not a complete civilization simulator: there is no combat resolution, diplomacy, trade, public island directory, or moderation system yet. The current progression includes settlement growth, migration, building upgrades, rallying settlers, hazards, and a computer civilization that keeps pace with the players. Without a configured Supabase project, cross-device persistence and real-network voice cannot be end-to-end verified. The SQL tests do not substitute for that deployment check.

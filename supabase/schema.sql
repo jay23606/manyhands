@@ -25,10 +25,11 @@ begin
     h := greatest(0,least(6,floor((1-d)*6+sin(x*.55)*.65+cos(y*.6)*.6)::int));
     n := sin(x*127.1+y*311.7)*43758.5453; n := n-floor(n);
     t := jsonb_build_object('h',h,'tree',h>1 and h<5 and n>.65,'b',null,'p',0);
-    if (x=11 and y=15) or (x=16 and y=12) or (x=13 and y=10) then t := jsonb_build_object('h',3,'tree',false,'b','village','p',5); end if;
+    if (x=11 and y=15) or (x=16 and y=12) or (x=13 and y=10) then t := jsonb_build_object('h',3,'tree',false,'b','village','p',5,'owner','hands'); end if;
+    if (x=21 and y=12) or (x=17 and y=17) or (x=20 and y=18) then t := jsonb_build_object('h',3,'tree',false,'b','village','p',5,'owner','rival'); end if;
     tiles := tiles || jsonb_build_array(t);
   end loop; end loop;
-  return jsonb_build_object('tiles',tiles,'mana',80,'age',0,'version',0,'walkers','[]'::jsonb,'events',jsonb_build_array(jsonb_build_object('text','Three settlements look to the sky.','age',0)));
+  return jsonb_build_object('tiles',tiles,'mana',80,'age',0,'version',0,'walkers','[]'::jsonb,'rival',jsonb_build_object('phase','watching','lastExpansion',0),'events',jsonb_build_array(jsonb_build_object('text','Three settlements look to the sky.','age',0)));
 end; $$;
 
 create or replace function public.mh_enter_world(room_name text) returns jsonb language plpgsql security definer set search_path = '' as $$
@@ -93,14 +94,14 @@ begin
 end; $$;
 
 create or replace function public.mh_step_world(room_name text) returns jsonb language plpgsql security definer set search_path = '' as $$
-declare s jsonb; last_time timestamptz; ts jsonb; t jsonb; q jsonb; age int; shrines int:=0; i int; population int; total_people int:=0; capacity int; tier int; walkers jsonb; next_walkers jsonb:='[]'; walker jsonb; path jsonb; at_index int; next_index int; home_index int; waits int; ev jsonb;
+declare s jsonb; last_time timestamptz; ts jsonb; t jsonb; q jsonb; age int; shrines int:=0; i int; population int; total_people int:=0; capacity int; tier int; walkers jsonb; next_walkers jsonb:='[]'; walker jsonb; path jsonb; at_index int; next_index int; home_index int; waits int; ev jsonb; hands_people int; rival_people int; hands_villages int; rival_villages int; target int; site int:=-1; last_expansion int;
 begin
   if auth.uid() is null or not exists(select 1 from public.mh_visitors where world_name=room_name and user_id=auth.uid()) then raise exception 'Enter this island first.'; end if;
   select state,last_tick into s,last_time from public.mh_worlds where name=room_name for update;
   if clock_timestamp()-last_time < interval '4 seconds' then return s; end if;
   -- Always exactly one step: days or months of absence never accumulate ticks.
   age := (s->>'age')::int+1; ts := s->'tiles'; walkers:=coalesce(s->'walkers','[]'::jsonb); ev:=s->'events';
-  select coalesce(sum((value->>'p')::int),0) into total_people from jsonb_array_elements(ts);
+  select coalesce(sum((value->>'p')::int),0) into total_people from jsonb_array_elements(ts) where coalesce(value->>'owner','hands')='hands';
   select total_people+coalesce(sum((value->>'p')::int),0) into total_people from jsonb_array_elements(walkers);
   for walker in select value from jsonb_array_elements(walkers) loop
     path:=walker->'path'; at_index:=(walker->>'at')::int; next_index:=(path->>0)::int;
@@ -114,7 +115,7 @@ begin
     path:=path-0;walker:=walker||jsonb_build_object('from',at_index,'at',next_index,'path',path,'wait',0);
     if jsonb_array_length(path)>0 then next_walkers:=next_walkers||jsonb_build_array(walker);continue;end if;
     if q->>'b' is null and not (q->>'tree')::boolean and (q->>'h')::int>=2 then
-      ts:=jsonb_set(ts,array[next_index::text],q||jsonb_build_object('b','village','p',(walker->>'p')::int));
+      ts:=jsonb_set(ts,array[next_index::text],q||jsonb_build_object('b','village','p',(walker->>'p')::int,'owner',coalesce(walker->>'owner','hands')));
       ev:=jsonb_build_array(jsonb_build_object('text','Settlers found a new home.','age',age))||ev;
       select coalesce(jsonb_agg(value),'[]'::jsonb) into ev from (select value from jsonb_array_elements(ev) with ordinality e(value,n) order by n limit 12) recent;
     else
@@ -125,16 +126,52 @@ begin
   for i in 0..783 loop
     t:=ts->i;
     if t->>'b'='shrine' then shrines:=shrines+1; end if;
-    if age%3=0 and t->>'b'='village' then
+    if age%3=0 and t->>'b'='village' and coalesce(t->>'owner','hands')='hands' then
       capacity:=public.mh_capacity(ts,i); tier:=case capacity when 80 then 3 when 40 then 2 when 18 then 1 else 0 end;
       population:=least(capacity,(t->>'p')::int+tier+1);
       if population>=capacity then
         path:=public.mh_settle_path(ts,i,next_walkers);
-        if path is not null then population:=population-4;next_walkers:=next_walkers||jsonb_build_array(jsonb_build_object('at',i,'from',i,'home',i,'path',path,'p',4,'wait',0));end if;
+        if path is not null then population:=population-4;next_walkers:=next_walkers||jsonb_build_array(jsonb_build_object('at',i,'from',i,'home',i,'path',path,'p',4,'wait',0,'owner','hands'));end if;
       end if;
       ts:=jsonb_set(ts,array[i::text,'p'],to_jsonb(population));
     end if;
   end loop;
+  -- Rival growth mirrors the hands already active in this exact tick.
+  select coalesce(sum((value->>'p')::int),0), count(*) filter (where value->>'b'='village') into hands_people,hands_villages from jsonb_array_elements(ts) where coalesce(value->>'owner','hands')='hands';
+  select hands_people+coalesce(sum((value->>'p')::int),0) into hands_people from jsonb_array_elements(next_walkers) where coalesce(value->>'owner','hands')='hands';
+  select coalesce(sum((value->>'p')::int),0), count(*) filter (where value->>'b'='village') into rival_people,rival_villages from jsonb_array_elements(ts) where value->>'owner'='rival';
+  target:=greatest(15,round(hands_people*.9+4));
+  if age%3=0 and rival_people<target then
+    for i in 0..783 loop
+      t:=ts->i;
+      if t->>'b'='village' and t->>'owner'='rival' and rival_people<target then
+        population:=least(public.mh_capacity(ts,i),(t->>'p')::int+1);
+        rival_people:=rival_people+population-(t->>'p')::int;
+        ts:=jsonb_set(ts,array[i::text,'p'],to_jsonb(population));
+      end if;
+    end loop;
+  end if;
+  last_expansion:=coalesce((s->'rival'->>'lastExpansion')::int,0);
+  if hands_villages>rival_villages and age-last_expansion>=9 then
+    for i in reverse 24..14 loop
+      for population in 3..24 loop
+        t:=ts->(population*28+i);
+        if t->>'b' is null and not (t->>'tree')::boolean and (t->>'h')::int>=2 and public.mh_capacity(ts,population*28+i)>=18 then site:=population*28+i; exit; end if;
+      end loop;
+      if site<>-1 then exit; end if;
+    end loop;
+    if site<>-1 then
+      ts:=jsonb_set(ts,array[site::text],(ts->site)||jsonb_build_object('b','village','p',3,'tree',false,'owner','rival'));
+      s:=s||jsonb_build_object('rival',jsonb_build_object('phase',coalesce(s->'rival'->>'phase','watching'),'lastExpansion',age));
+      ev:=jsonb_build_array(jsonb_build_object('text','Across the water, another rival banner rises.','age',age))||ev;
+    end if;
+  end if;
+  select count(*) filter (where value->>'b'='village') into rival_villages from jsonb_array_elements(ts) where value->>'owner'='rival';
+  if hands_villages>=6 and rival_villages>=6 and coalesce(s->'rival'->>'phase','watching')='watching' then
+    s:=s||jsonb_build_object('rival',jsonb_build_object('phase','contested','lastExpansion',coalesce((s->'rival'->>'lastExpansion')::int,0)));
+    ev:=jsonb_build_array(jsonb_build_object('text','The two civilizations can see each other. Prepare your people.','age',age))||ev;
+  end if;
+  select coalesce(jsonb_agg(value),'[]'::jsonb) into ev from (select value from jsonb_array_elements(ev) with ordinality e(value,n) order by n limit 12) recent;
   s:=s || jsonb_build_object('tiles',ts,'walkers',next_walkers,'events',ev,'age',age,'version',(s->>'version')::int+1,'mana',least(120,(s->>'mana')::int+2+total_people/12+shrines*2));
   update public.mh_worlds set state=s,last_tick=clock_timestamp() where name=room_name;
   return s;

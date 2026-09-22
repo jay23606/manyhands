@@ -24,12 +24,14 @@ import {
   ChevronRight,
   Leaf,
   Flag,
+  Eye,
 } from "lucide";
 import {
   makeWorld,
   applyAction,
   stepWorld,
   stats,
+  sideStats,
   housing,
   COST,
   checkDisasters,
@@ -60,6 +62,7 @@ const icons = {
   ChevronRight,
   Leaf,
   Flag,
+  Eye,
 };
 const $ = (s) => document.querySelector(s);
 const icon = (name) =>
@@ -90,7 +93,7 @@ $("#app").innerHTML =
   `<canvas id="world" aria-label="Isometric island. Select a power then click a tile to shape it. Left drag paints. Right drag lowers. Space drag pans. On touch, two fingers pan and pinch zoom."></canvas>
 <header><a class="brand" href="#" aria-label="Manyhands home">${icon("Hand")}<span>manyhands<span class="brand-dot">.</span></span></a><button id="island" class="island-button">${icon("Globe")}<span id="room-label">First light</span><span class="divider"></span><span id="mode">Your island</span>${icon("ChevronRight")}</button><div class="header-actions"><button id="help" class="icon-button" aria-label="How to play">${icon("HelpCircle")}</button><button id="share" class="pill">${icon("Users")}<span>Play together</span></button></div></header>
 <section class="world-title"><div class="eyebrow">A WORLD IN YOUR HANDS</div><h1>Something small.<br>Something alive.</h1><p id="intro">Raise the earth. Make room for life.</p><div class="live-line"><span class="pulse"></span><span id="presence">Just you, for now</span><span class="dot">·</span><span id="age">Day 1</span></div></section>
-<aside class="stats" aria-label="Island statistics"><div>${icon("Users")}<strong id="people">15</strong><span>people</span></div><div>${icon("House")}<strong id="villages">3</strong><span>settlements</span></div><div>${icon("Leaf")}<strong id="trees">0</strong><span>trees</span></div></aside>
+<aside class="stats" aria-label="Civilization statistics"><div>${icon("Users")}<strong id="people">15</strong><span>people</span></div><div>${icon("House")}<strong id="villages">3</strong><span>settlements</span></div><div>${icon("Leaf")}<strong id="trees">0</strong><span>trees</span></div><button id="rival-toggle" class="watch-button" aria-pressed="false">${icon("Eye")}<span>Watch rival</span></button></aside>
 <div class="tile-info" id="tile-info" hidden></div><div class="world-note"><span class="small-star">✧</span><span id="event">Three settlements look to the sky.</span></div>
 <div class="camera"><button id="zoom-in" class="icon-button" aria-label="Zoom in">${icon("Plus")}</button><button id="zoom-out" class="icon-button" aria-label="Zoom out">${icon("Minus")}</button><span></span><button id="rotate-left" class="icon-button" aria-label="Rotate left">⟲</button><button id="recenter" class="icon-button" aria-label="Recenter island">${icon("Maximize")}</button><button id="rotate-right" class="icon-button" aria-label="Rotate right">⟳</button><span></span><button id="view-toggle" class="icon-button view-toggle" aria-label="Switch to top-down map" aria-pressed="false">2D</button><button id="rally-toggle" class="icon-button" aria-label="Rally mode" aria-pressed="false">${icon("Flag")}</button></div>
 <footer><div class="bottom-left"><button id="voice" class="pill subdued" aria-label="Enable island voice" aria-pressed="false">${icon("MicOff")}<span>Voice off</span></button><button id="sound" class="icon-button" aria-label="Enable sound effects" aria-pressed="false">${icon("VolumeX")}</button></div><div class="tool-wrap"><div class="faith"><span>✧</span><span id="mana">80</span><span class="faith-label">faith</span><div class="faith-track"><div id="faith-fill"></div></div></div><nav class="tools" aria-label="Divine powers">${tools.map(([id, i, label, cost], n) => `<button data-tool="${id}" class="tool ${id === tool ? "active" : ""}" aria-label="${label}, ${cost} faith, shortcut ${n + 1}" aria-pressed="${id === tool}"><span class="key">${n + 1}</span>${icon(i)}<span>${label}</span><small>${cost} ✧</small></button>`).join("")}</nav><p class="hint" id="hint">Click to raise land <span>·</span> Space + drag to pan <span>·</span> Scroll to zoom</p></div><div class="save-state" id="save-state">Saved on this device</div></footer>
@@ -101,6 +104,7 @@ const refreshIcons = () => createIcons({ icons });
 refreshIcons();
 let lastEventAge = -1;
 let rallyMode = null;
+let perspective = "hands";
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").classList.add("show");
@@ -116,7 +120,9 @@ function persist() {
     }
 }
 function update() {
-  const s = stats(world);
+  const hands = stats(world);
+  const rival = sideStats(world, "rival");
+  const s = perspective === "rival" ? rival : hands;
   $("#people").textContent = s.people;
   $("#villages").textContent = s.villages;
   $("#trees").textContent = s.trees;
@@ -142,16 +148,16 @@ function update() {
       text: "Your followers build cottages. A civilization awakens.",
     },
     {
-      done: s.people >= 40,
+      done: hands.people >= 40,
       phase: "growth",
       title: "A people, growing.",
-      text: `Grow to 40 followers · ${s.people} / 40`,
+      text: `Grow to 40 followers · ${hands.people} / 40`,
     },
     {
-      done: s.villages >= 6,
+      done: hands.villages >= 6,
       phase: "established",
       title: "Beyond the doorstep.",
-      text: `Full homes send settlers to new ground · ${s.villages} / 6 homes`,
+      text: `Full homes send settlers to new ground · ${hands.villages} / 6 homes`,
     },
     {
       done: homes.some((h) => h.tier === 3),
@@ -160,16 +166,16 @@ function update() {
       text: "Manors rise on the horizon. Your influence spreads.",
     },
     {
-      done: homes.some((h) => h.tier === 4),
+      done: homes.some((h) => h.tier === 3),
       phase: "ascendant",
       title: "Citadels of faith.",
       text: "The greatest monuments to your vision stand complete.",
     },
     {
-      done: s.people >= 100,
+      done: hands.people >= 100,
       phase: "ascendant",
       title: "A hundred small lives.",
-      text: `Make room for 100 followers · ${s.people} / 100`,
+      text: `Make room for 100 followers · ${hands.people} / 100`,
     },
   ];
   const goal = goals.find((g) => !g.done) || {
@@ -186,8 +192,10 @@ function update() {
   else if (goals.some((g) => g.done && g.phase === "growth")) phase = "growth";
 
   $(".world-title").className = `world-title phase-${phase}`;
-  $(".world-title h1").textContent = goal.title;
-  $("#intro").textContent = goal.text;
+  $(".world-title h1").textContent = perspective === "rival" ? "Across the water." : goal.title;
+  $("#intro").textContent = perspective === "rival"
+    ? `${rival.people} rival followers · tracking your ${hands.people}. ${world.rival?.phase === "contested" ? "Their borders are closing in." : "They expand as your people do."}`
+    : goal.text;
   document
     .querySelectorAll("[data-tool]")
     .forEach((b) =>
@@ -210,6 +218,10 @@ const network = new Network(
 );
 async function act(index, override) {
   if (index < 0 || acting || joining) return;
+  if (perspective === "rival") {
+    toast("You are watching the rival. Switch back to shape your land.");
+    return;
+  }
 
   // Handle rally mode
   if (rallyMode === true) {
@@ -324,6 +336,16 @@ $("#rally-toggle").onclick = () => {
       ? "Rally mode: click a settlement to send settlers"
       : "Rally cancelled",
   );
+};
+$("#rival-toggle").onclick = () => {
+  perspective = perspective === "hands" ? "rival" : "hands";
+  const watching = perspective === "rival";
+  $("#rival-toggle").setAttribute("aria-pressed", String(watching));
+  $("#rival-toggle span").textContent = watching ? "Return home" : "Watch rival";
+  document.body.classList.toggle("watching-rival", watching);
+  rallyMode = null;
+  update();
+  toast(watching ? "Watching the rival civilization. Crimson banners mark its homes." : "Your civilization is in your hands again.");
 };
 $(".brand").onclick = (e) => {
   e.preventDefault();
