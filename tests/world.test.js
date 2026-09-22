@@ -68,6 +68,9 @@ test("a rallied force can take an enemy settlement and end a citadel war", () =>
     const t = w.tiles[source + dy * 28 + dx];
     t.h = 3;
     t.tree = false;
+    const enemyGround = w.tiles[target + dy * 28 + dx];
+    enemyGround.h = 3;
+    enemyGround.tree = false;
   }
   w.tiles[source].p = 16;
   w.tiles[target] = { h: 3, tree: false, b: "village", p: 5, owner: "rival" };
