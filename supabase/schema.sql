@@ -94,7 +94,7 @@ begin
 end; $$;
 
 create or replace function public.mh_step_world(room_name text) returns jsonb language plpgsql security definer set search_path = '' as $$
-declare s jsonb; last_time timestamptz; ts jsonb; t jsonb; q jsonb; age int; shrines int:=0; i int; population int; total_people int:=0; capacity int; tier int; walkers jsonb; next_walkers jsonb:='[]'; walker jsonb; path jsonb; at_index int; next_index int; home_index int; waits int; ev jsonb; hands_people int; rival_people int; hands_villages int; rival_villages int; target int; site int:=-1; last_expansion int;
+declare s jsonb; last_time timestamptz; ts jsonb; t jsonb; q jsonb; age int; shrines int:=0; i int; population int; total_people int:=0; capacity int; tier int; walkers jsonb; next_walkers jsonb:='[]'; walker jsonb; path jsonb; at_index int; next_index int; home_index int; waits int; ev jsonb; hands_people int; rival_people int; hands_villages int; rival_villages int; target int; site int:=-1; last_expansion int; attacker_owner text; defenders int; citadel boolean;
 begin
   if auth.uid() is null or not exists(select 1 from public.mh_visitors where world_name=room_name and user_id=auth.uid()) then raise exception 'Enter this island first.'; end if;
   select state,last_tick into s,last_time from public.mh_worlds where name=room_name for update;
@@ -114,7 +114,19 @@ begin
     end if;
     path:=path-0;walker:=walker||jsonb_build_object('from',at_index,'at',next_index,'path',path,'wait',0);
     if jsonb_array_length(path)>0 then next_walkers:=next_walkers||jsonb_build_array(walker);continue;end if;
-    if q->>'b' is null and not (q->>'tree')::boolean and (q->>'h')::int>=2 then
+    attacker_owner:=coalesce(walker->>'owner','hands');
+    if q->>'b'='village' and coalesce(q->>'owner','hands')<>attacker_owner then
+      defenders:=(q->>'p')::int;
+      if (walker->>'p')::int>=defenders then
+        citadel:=public.mh_capacity(ts,next_index)=80;
+        ts:=jsonb_set(ts,array[next_index::text],q||jsonb_build_object('owner',attacker_owner,'p',greatest(1,(walker->>'p')::int-defenders)));
+        ev:=jsonb_build_array(jsonb_build_object('text',case when citadel then 'A citadel falls. The war is won.' else 'A rival settlement changes hands.' end,'age',age))||ev;
+        if citadel then s:=s||jsonb_build_object('winner',attacker_owner); end if;
+      else
+        ts:=jsonb_set(ts,array[next_index::text,'p'],to_jsonb(defenders-(walker->>'p')::int));
+        ev:=jsonb_build_array(jsonb_build_object('text','The defenders hold their settlement.','age',age))||ev;
+      end if;
+    elsif q->>'b' is null and not (q->>'tree')::boolean and (q->>'h')::int>=2 then
       ts:=jsonb_set(ts,array[next_index::text],q||jsonb_build_object('b','village','p',(walker->>'p')::int,'owner',coalesce(walker->>'owner','hands')));
       ev:=jsonb_build_array(jsonb_build_object('text','Settlers found a new home.','age',age))||ev;
       select coalesce(jsonb_agg(value),'[]'::jsonb) into ev from (select value from jsonb_array_elements(ev) with ordinality e(value,n) order by n limit 12) recent;

@@ -99,7 +99,7 @@ $("#app").innerHTML =
 <footer><div class="bottom-left"><button id="voice" class="pill subdued" aria-label="Enable island voice" aria-pressed="false">${icon("MicOff")}<span>Voice off</span></button><button id="sound" class="icon-button" aria-label="Enable sound effects" aria-pressed="false">${icon("VolumeX")}</button></div><div class="tool-wrap"><div class="faith"><span>✧</span><span id="mana">80</span><span class="faith-label">faith</span><div class="faith-track"><div id="faith-fill"></div></div></div><nav class="tools" aria-label="Divine powers">${tools.map(([id, i, label, cost], n) => `<button data-tool="${id}" class="tool ${id === tool ? "active" : ""}" aria-label="${label}, ${cost} faith, shortcut ${n + 1}" aria-pressed="${id === tool}"><span class="key">${n + 1}</span>${icon(i)}<span>${label}</span><small>${cost} ✧</small></button>`).join("")}</nav><p class="hint" id="hint">Click to raise land <span>·</span> Space + drag to pan <span>·</span> Scroll to zoom</p></div><div class="save-state" id="save-state">Saved on this device</div></footer>
 <div id="toast" role="status"></div>
 <dialog id="connect-dialog"><button class="close icon-button" data-close aria-label="Close">${icon("X")}</button><div class="eyebrow">MANY HANDS. ONE WORLD.</div><h2>A place to meet.</h2><p>Share an island name. Shape the same land, and talk as you play. The world rests when everyone leaves.</p><form id="connect-form"><label>Island name<input id="room-input" required pattern="[a-z0-9-]{1,40}" maxlength="40" value="first-light" placeholder="first-light"></label><details id="connection-settings"><summary>Connection settings</summary><label>Supabase project URL<input id="url-input" type="url" placeholder="https://your-project.supabase.co"></label><label>Publishable / anon key<input id="key-input" placeholder="sb_publishable_…" autocomplete="off"></label><p class="fine">Run the included database setup and enable anonymous sign-ins first. Never enter a service-role key.</p></details><p id="connection-state" class="fine">No project yet? Your own island is ready to play.</p><button class="primary" id="join" type="submit">Enter shared island ${icon("ChevronRight")}</button></form><button class="text-button" id="local">Return to my island</button></dialog>
-<dialog id="help-dialog"><button class="close icon-button" data-close aria-label="Close">${icon("X")}</button><div class="eyebrow">A LITTLE GUIDANCE</div><h2>Let the world grow.</h2><p>You shape the land. Your people find their own way.</p><div class="guide-row">${icon("Mountain")}<div><strong>Make room</strong><p>Raise the sea into land. Flat land upgrades homes: hut → cottage → manor → citadel. You can sculpt beneath buildings; lowering them into the sea floods them.</p></div></div><div class="guide-row">${icon("House")}<div><strong>Give life a home</strong><p>Full homes send settlers to suitable nearby land. Make clear, level ground and gentle routes for them. Larger homes grow faster.</p></div></div><div class="guide-row">${icon("Sun")}<div><strong>Gather faith</strong><p>More followers mean more faith. Shrines replenish it faster. Bless an area to help its people grow.</p></div></div><div class="guide-row">${icon("Users")}<div><strong>Leave your mark</strong><p>Shared islands keep changing while anyone is present. Voice is optional. Everyone with voice enabled on the same island can hear each other.</p></div></div><p class="fine">Left-click or drag uses your selected power. Right-click or drag lowers land. Hold Space and drag to pan. On mobile, select a power and paint with one finger; use two fingers to pan and pinch to zoom. Keys 1–6 choose a power. + / − zoom. 0 centers the island. Escape closes a window. Local islands pause when their tab is hidden.</p><button class="primary" data-close>Back to the island</button></dialog>`;
+<dialog id="help-dialog"><button class="close icon-button" data-close aria-label="Close">${icon("X")}</button><div class="eyebrow">A LITTLE GUIDANCE</div><h2>Let the world grow.</h2><p>You shape the land. Your people find their own way.</p><div class="guide-row">${icon("Mountain")}<div><strong>Make room</strong><p>Raise the sea into land. Flat land upgrades homes: hut → cottage → manor → citadel. You can sculpt beneath buildings; lowering them into the sea floods them.</p></div></div><div class="guide-row">${icon("House")}<div><strong>Give life a home</strong><p>Full homes send settlers to suitable nearby land. Make clear, level ground and gentle routes for them. Larger homes grow faster.</p></div></div><div class="guide-row">${icon("Flag")}<div><strong>Take the frontier</strong><p>When the world becomes contested, rally settlers onto a crimson settlement. A force that outnumbers its defenders captures it. Capture a rival citadel to win.</p></div></div><div class="guide-row">${icon("Users")}<div><strong>Leave your mark</strong><p>Shared islands keep changing while anyone is present. Voice is optional. Everyone with voice enabled on the same island can hear each other.</p></div></div><p class="fine">Left-click or drag uses your selected power. Right-click or drag lowers land. Hold Space and drag to pan. On mobile, select a power and paint with one finger; use two fingers to pan and pinch to zoom. Keys 1–6 choose a power. + / − zoom. 0 centers the island. Escape closes a window. Local islands pause when their tab is hidden.</p><button class="primary" data-close>Back to the island</button></dialog>`;
 const refreshIcons = () => createIcons({ icons });
 refreshIcons();
 let lastEventAge = -1;
@@ -192,8 +192,12 @@ function update() {
   else if (goals.some((g) => g.done && g.phase === "growth")) phase = "growth";
 
   $(".world-title").className = `world-title phase-${phase}`;
-  $(".world-title h1").textContent = perspective === "rival" ? "Across the water." : goal.title;
-  $("#intro").textContent = perspective === "rival"
+  $(".world-title h1").textContent = world.winner
+    ? world.winner === "hands" ? "The island is yours." : "The rival prevails."
+    : perspective === "rival" ? "Across the water." : goal.title;
+  $("#intro").textContent = world.winner
+    ? "A citadel fell. Start another shared island to shape a new history."
+    : perspective === "rival"
     ? `${rival.people} rival followers · tracking your ${hands.people}. ${world.rival?.phase === "contested" ? "Their borders are closing in." : "They expand as your people do."}`
     : goal.text;
   document
@@ -240,8 +244,13 @@ async function act(index, override) {
 
   if (typeof rallyMode === "number") {
     const dest = world.tiles[index];
-    if (!dest || dest.h < 0 || dest.b === "village" || dest.tree) {
-      toast("Rally to flat, empty ground only");
+    const enemyHome = dest?.b === "village" && dest.owner === "rival";
+    if (!dest || dest.h < 0 || (dest.b === "village" && !enemyHome) || dest.tree) {
+      toast("Rally to empty ground or a rival settlement");
+      return;
+    }
+    if (enemyHome && world.rival?.phase !== "contested") {
+      toast("The rival is still beyond reach. Build until the world is contested.");
       return;
     }
     selected = index;

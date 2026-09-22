@@ -6,6 +6,7 @@ import {
   stepWorld,
   stats,
   housing,
+  rally,
 } from "../src/world.js";
 test("terrain costs faith and can move or flood occupied tiles", () => {
   const w = makeWorld();
@@ -58,4 +59,20 @@ test("invalid construction and insufficient faith do not mutate state", () => {
   w.mana = 0;
   assert.ok(applyAction(w, "raise", 0));
   assert.equal(w.tiles[0].h, 0);
+});
+test("a rallied force can take an enemy settlement and end a citadel war", () => {
+  const w = makeWorld();
+  const source = 15 * 28 + 11;
+  const target = source + 1;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const t = w.tiles[source + dy * 28 + dx];
+    t.h = 3;
+    t.tree = false;
+  }
+  w.tiles[source].p = 16;
+  w.tiles[target] = { h: 3, tree: false, b: "village", p: 5, owner: "rival" };
+  assert.equal(rally(w, source, target), true);
+  stepWorld(w);
+  assert.equal(w.tiles[target].owner, "hands");
+  assert.equal(w.winner, "hands");
 });

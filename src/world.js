@@ -200,7 +200,25 @@ export function stepWorld(world) {
     w.path.shift();
     w.wait = 0;
     if (w.path.length) return true;
-    if (!target.b && !target.tree && target.h >= 2) {
+    if (
+      target.b === "village" &&
+      (target.owner || "hands") !== (w.owner || "hands")
+    ) {
+      const defenders = target.p;
+      if (w.p >= defenders) {
+        const citadel = housing(world, w.at).tier === 3;
+        target.owner = w.owner || "hands";
+        target.p = Math.max(1, w.p - defenders);
+        world.events = [
+          { text: citadel ? "A citadel falls. The war is won." : "A rival settlement changes hands.", age: world.age },
+          ...world.events,
+        ].slice(0, 12);
+        if (citadel) world.winner = w.owner || "hands";
+      } else {
+        target.p -= w.p;
+        world.events = [{ text: "The defenders hold their settlement.", age: world.age }, ...world.events].slice(0, 12);
+      }
+    } else if (!target.b && !target.tree && target.h >= 2) {
       target.b = "village";
       target.p = w.p;
       target.owner = w.owner || "hands";
@@ -367,7 +385,8 @@ export function sideStats(w, owner) {
  */
 export function rally(world, sourceIdx, destIdx) {
   const source = world.tiles[sourceIdx];
-  if (source.b !== "village" || source.p <= 1) return false;
+  if (world.winner) return false;
+  if (source.b !== "village" || (source.owner || "hands") !== "hands" || source.p <= 1) return false;
 
   const dest = world.tiles[destIdx];
   if (!dest) return false;
@@ -383,7 +402,7 @@ export function rally(world, sourceIdx, destIdx) {
 
   world.walkers.push({ at: sourceIdx, from: sourceIdx, home: sourceIdx, path, p: toSend, wait: 0, rally: true, owner: "hands" });
   world.events = [
-    { text: `⚔️ Rally! ${toSend} settlers march forth.`, age: world.age },
+    { text: dest.b === "village" ? `⚔️ Rally! ${toSend} settlers march to battle.` : `⚔️ Rally! ${toSend} settlers march forth.`, age: world.age },
     ...world.events,
   ].slice(0, 12);
   return true;
