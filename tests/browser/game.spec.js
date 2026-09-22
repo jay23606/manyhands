@@ -104,6 +104,47 @@ test("two-finger pan and pinch do not accidentally change terrain", async ({
     await page.evaluate(() => localStorage.getItem("manyhands-world")),
   ).toBeNull();
 });
+test("top-down map is precise and returns to isometric", async ({ page }) => {
+  await page.goto("/");
+  // Establish the saved local island before comparing terrain totals.
+  await page.locator("#world").click({ position: { x: 640, y: 370 } });
+  await page.locator('[data-tool="raise"]').click();
+  await page.locator("#view-toggle").click();
+  await expect(page.locator("#view-toggle")).toHaveText("3D");
+  await expect(page.locator("#view-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator("#toast")).toContainText("Top-down map");
+  // Let the renderer recalculate its square-grid scale before selecting a tile.
+  await page.waitForTimeout(100);
+  const before = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("manyhands-world")).tiles.reduce(
+      (sum, tile) => sum + tile.h,
+      0,
+    ),
+  );
+  const box = await page.locator("#world").boundingBox();
+  await page
+    .locator("#world")
+    .click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("manyhands-world")).tiles.reduce(
+          (sum, tile) => sum + tile.h,
+          0,
+        ),
+      ),
+    )
+    .not.toBe(before);
+  await page.locator("#view-toggle").click();
+  await expect(page.locator("#view-toggle")).toHaveText("2D");
+  await expect(page.locator("#view-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+});
 test("foyer negotiates actual two-peer WebRTC audio with local signaling", async ({
   page,
 }) => {

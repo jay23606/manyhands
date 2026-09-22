@@ -92,7 +92,7 @@ $("#app").innerHTML =
 <section class="world-title"><div class="eyebrow">A WORLD IN YOUR HANDS</div><h1>Something small.<br>Something alive.</h1><p id="intro">Raise the earth. Make room for life.</p><div class="live-line"><span class="pulse"></span><span id="presence">Just you, for now</span><span class="dot">·</span><span id="age">Day 1</span></div></section>
 <aside class="stats" aria-label="Island statistics"><div>${icon("Users")}<strong id="people">15</strong><span>people</span></div><div>${icon("House")}<strong id="villages">3</strong><span>settlements</span></div><div>${icon("Leaf")}<strong id="trees">0</strong><span>trees</span></div></aside>
 <div class="tile-info" id="tile-info" hidden></div><div class="world-note"><span class="small-star">✧</span><span id="event">Three settlements look to the sky.</span></div>
-<div class="camera"><button id="zoom-in" class="icon-button" aria-label="Zoom in">${icon("Plus")}</button><button id="zoom-out" class="icon-button" aria-label="Zoom out">${icon("Minus")}</button><span></span><button id="rotate-left" class="icon-button" aria-label="Rotate left">⟲</button><button id="recenter" class="icon-button" aria-label="Recenter island">${icon("Maximize")}</button><button id="rotate-right" class="icon-button" aria-label="Rotate right">⟳</button><span></span><button id="rally-toggle" class="icon-button" aria-label="Rally mode" aria-pressed="false">${icon("Flag")}</button></div>
+<div class="camera"><button id="zoom-in" class="icon-button" aria-label="Zoom in">${icon("Plus")}</button><button id="zoom-out" class="icon-button" aria-label="Zoom out">${icon("Minus")}</button><span></span><button id="rotate-left" class="icon-button" aria-label="Rotate left">⟲</button><button id="recenter" class="icon-button" aria-label="Recenter island">${icon("Maximize")}</button><button id="rotate-right" class="icon-button" aria-label="Rotate right">⟳</button><span></span><button id="view-toggle" class="icon-button view-toggle" aria-label="Switch to top-down map" aria-pressed="false">2D</button><button id="rally-toggle" class="icon-button" aria-label="Rally mode" aria-pressed="false">${icon("Flag")}</button></div>
 <footer><div class="bottom-left"><button id="voice" class="pill subdued" aria-label="Enable island voice" aria-pressed="false">${icon("MicOff")}<span>Voice off</span></button><button id="sound" class="icon-button" aria-label="Enable sound effects" aria-pressed="false">${icon("VolumeX")}</button></div><div class="tool-wrap"><div class="faith"><span>✧</span><span id="mana">80</span><span class="faith-label">faith</span><div class="faith-track"><div id="faith-fill"></div></div></div><nav class="tools" aria-label="Divine powers">${tools.map(([id, i, label, cost], n) => `<button data-tool="${id}" class="tool ${id === tool ? "active" : ""}" aria-label="${label}, ${cost} faith, shortcut ${n + 1}" aria-pressed="${id === tool}"><span class="key">${n + 1}</span>${icon(i)}<span>${label}</span><small>${cost} ✧</small></button>`).join("")}</nav><p class="hint" id="hint">Click to raise land <span>·</span> Space + drag to pan <span>·</span> Scroll to zoom</p></div><div class="save-state" id="save-state">Saved on this device</div></footer>
 <div id="toast" role="status"></div>
 <dialog id="connect-dialog"><button class="close icon-button" data-close aria-label="Close">${icon("X")}</button><div class="eyebrow">MANY HANDS. ONE WORLD.</div><h2>A place to meet.</h2><p>Share an island name. Shape the same land, and talk as you play. The world rests when everyone leaves.</p><form id="connect-form"><label>Island name<input id="room-input" required pattern="[a-z0-9-]{1,40}" maxlength="40" value="first-light" placeholder="first-light"></label><details id="connection-settings"><summary>Connection settings</summary><label>Supabase project URL<input id="url-input" type="url" placeholder="https://your-project.supabase.co"></label><label>Publishable / anon key<input id="key-input" placeholder="sb_publishable_…" autocomplete="off"></label><p class="fine">Run the included database setup and enable anonymous sign-ins first. Never enter a service-role key.</p></details><p id="connection-state" class="fine">No project yet? Your own island is ready to play.</p><button class="primary" id="join" type="submit">Enter shared island ${icon("ChevronRight")}</button></form><button class="text-button" id="local">Return to my island</button></dialog>
@@ -124,7 +124,10 @@ function update() {
   $("#faith-fill").style.width = (world.mana / 120) * 100 + "%";
   $("#age").textContent = "Day " + (world.age + 1);
   $("#event").textContent = world.events[0]?.text || "The island is waking.";
-  if (world.events[0]?.age !== lastEventAge && /☄️|🦠|🏜️/.test(world.events[0]?.text)) {
+  if (
+    world.events[0]?.age !== lastEventAge &&
+    /☄️|🦠|🏜️/.test(world.events[0]?.text)
+  ) {
     chime("disaster");
     lastEventAge = world.events[0]?.age;
   }
@@ -178,7 +181,8 @@ function update() {
   // Determine progression phase for title styling
   let phase = "emerging";
   if (goals.some((g) => g.done && g.phase === "ascendant")) phase = "ascendant";
-  else if (goals.some((g) => g.done && g.phase === "established")) phase = "established";
+  else if (goals.some((g) => g.done && g.phase === "established"))
+    phase = "established";
   else if (goals.some((g) => g.done && g.phase === "growth")) phase = "growth";
 
   $(".world-title").className = `world-title phase-${phase}`;
@@ -297,10 +301,29 @@ $("#zoom-out").onclick = () =>
 $("#recenter").onclick = () => renderer.reset();
 $("#rotate-left").onclick = () => (renderer.rotation -= 1);
 $("#rotate-right").onclick = () => (renderer.rotation += 1);
+$("#view-toggle").onclick = () => {
+  const topdown = renderer.toggleView() === "topdown";
+  const control = $("#view-toggle");
+  control.textContent = topdown ? "3D" : "2D";
+  control.setAttribute("aria-pressed", String(topdown));
+  control.setAttribute(
+    "aria-label",
+    topdown ? "Switch to isometric view" : "Switch to top-down map",
+  );
+  toast(
+    topdown
+      ? "Top-down map: sculpt any tile precisely."
+      : "Isometric view restored.",
+  );
+};
 $("#rally-toggle").onclick = () => {
   rallyMode = rallyMode ? null : true;
   $("#rally-toggle").setAttribute("aria-pressed", rallyMode ? "true" : "false");
-  toast(rallyMode ? "Rally mode: click a settlement to send settlers" : "Rally cancelled");
+  toast(
+    rallyMode
+      ? "Rally mode: click a settlement to send settlers"
+      : "Rally cancelled",
+  );
 };
 $(".brand").onclick = (e) => {
   e.preventDefault();
@@ -322,9 +345,14 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "+" || e.key === "=") $("#zoom-in").click();
   if (e.key === "-") $("#zoom-out").click();
   if (e.key === "0") renderer.reset();
+  if (e.key === "v" || e.key === "V") $("#view-toggle").click();
   if (e.key === "r" || e.key === "R") {
     rallyMode = rallyMode ? null : true;
-    toast(rallyMode ? "Rally mode: click a settlement to send settlers" : "Rally cancelled");
+    toast(
+      rallyMode
+        ? "Rally mode: click a settlement to send settlers"
+        : "Rally cancelled",
+    );
   }
   if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A")
     renderer.rotation -= 1;

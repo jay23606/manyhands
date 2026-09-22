@@ -8,6 +8,7 @@ export class Renderer {
     this.zoom = 1;
     this.pan = { x: 0, y: 0 };
     this.rotation = 0;
+    this.view = "isometric";
     this.hover = -1;
     this.particles = [];
     this.pointer = { x: 0, y: 0 };
@@ -156,23 +157,38 @@ export class Renderer {
   rotate(x, y) {
     const m = SIZE - 1;
     switch (this.rotation & 3) {
-      case 1: return [y, m - x];
-      case 2: return [m - x, m - y];
-      case 3: return [m - y, x];
-      default: return [x, y];
+      case 1:
+        return [y, m - x];
+      case 2:
+        return [m - x, m - y];
+      case 3:
+        return [m - y, x];
+      default:
+        return [x, y];
     }
   }
   unrotate(rx, ry) {
     const m = SIZE - 1;
     switch (this.rotation & 3) {
-      case 1: return [m - ry, rx];
-      case 2: return [m - rx, m - ry];
-      case 3: return [ry, m - rx];
-      default: return [rx, ry];
+      case 1:
+        return [m - ry, rx];
+      case 2:
+        return [m - rx, m - ry];
+      case 3:
+        return [ry, m - rx];
+      default:
+        return [rx, ry];
     }
   }
   project(x, y, h = 0) {
     const [rx, ry] = this.rotate(x, y);
+
+    if (this.view === "topdown") {
+      return {
+        x: this.w / 2 + (rx - (SIZE - 1) / 2) * this.tw + this.pan.x,
+        y: this.h / 2 + (ry - (SIZE - 1) / 2) * this.tw + this.pan.y,
+      };
+    }
 
     const px = this.w / 2 + ((rx - ry) * this.tw) / 2 + this.pan.x;
     const py =
@@ -211,6 +227,15 @@ export class Renderer {
   pick(x, y) {
     if (!this.tw) return -1;
     const world = this.getWorld();
+    if (this.view === "topdown") {
+      // Direct calculation prevents a dead seam between square tiles while
+      // painting; it also makes the map view pleasant on a small touch screen.
+      const rx = Math.floor((x - this.w / 2 - this.pan.x) / this.tw + SIZE / 2);
+      const ry = Math.floor((y - this.h / 2 - this.pan.y) / this.tw + SIZE / 2);
+      if (rx < 0 || rx >= SIZE || ry < 0 || ry >= SIZE) return -1;
+      const [gx, gy] = this.unrotate(rx, ry);
+      return gy * SIZE + gx;
+    }
     // Front-to-back in the ROTATED view, mirroring the draw order.
     for (let ry = SIZE - 1; ry >= 0; ry--)
       for (let rx = SIZE - 1; rx >= 0; rx--) {
@@ -226,6 +251,26 @@ export class Renderer {
       }
     return -1;
   }
+  toggleView() {
+    this.view = this.view === "isometric" ? "topdown" : "isometric";
+    this.pan = { x: 0, y: 0 };
+    this.zoom = 1;
+    return this.view;
+  }
+  tile(p, color, stroke) {
+    const c = this.c;
+    if (this.view !== "topdown") {
+      this.diamond(p.x, p.y, this.tw, this.th, color, stroke);
+      return;
+    }
+    c.fillStyle = color;
+    c.fillRect(p.x - this.tw / 2, p.y - this.tw / 2, this.tw, this.tw);
+    if (stroke) {
+      c.strokeStyle = stroke;
+      c.lineWidth = 0.75;
+      c.strokeRect(p.x - this.tw / 2, p.y - this.tw / 2, this.tw, this.tw);
+    }
+  }
   burst(i, color = "#d4edac", type = "spell") {
     const p = this.project(
       i % SIZE,
@@ -236,7 +281,7 @@ export class Renderer {
       // Rain falls downward in a gentle shower
       const radius = this.tw * 1.5;
       for (let n = 0; n < 24; n++) {
-        const angle = (Math.random() * Math.PI * 2);
+        const angle = Math.random() * Math.PI * 2;
         this.particles.push({
           x: p.x + Math.cos(angle) * radius * Math.random(),
           y: p.y - this.th * Math.random() * 2,
@@ -575,10 +620,12 @@ export class Renderer {
     // Enable smoothing for softer, less blocky appearance
     c.imageSmoothingEnabled = true;
     c.imageSmoothingQuality = "high";
-    // Very steep top-down angle for terrain precision + micro-tiles for targeting
-    this.tw = Math.min(w / (w < 600 ? 22 : 35), h / 20, 22) * this.zoom;
+    this.tw =
+      (this.view === "topdown"
+        ? Math.min(w / (SIZE + 5), h / (SIZE + 5), 31)
+        : Math.min(w / (w < 600 ? 22 : 35), h / 20, 22)) * this.zoom;
     this.th = this.tw * 0.5;
-    this.elev = this.tw * 0.50; // Steep bird's-eye perspective (from 0.36)
+    this.elev = this.tw * 0.5;
     const s = this.tw / 32;
     // Walk the ROTATED grid back-to-front so the painter's algorithm stays correct
     // at every quarter turn, then map back to the source tile.
@@ -593,7 +640,11 @@ export class Renderer {
         if (t.h === 0) {
           const a =
             0.05 + (Math.sin(time * 0.6 + x * 0.6 + y * 0.3) + 1) * 0.018;
-          this.diamond(p.x, p.y, this.tw, this.th, `rgba(86,169,173,${a})`);
+          this.tile(
+            p,
+            `rgba(86,169,173,${a})`,
+            this.view === "topdown" ? "#8fc6bb22" : undefined,
+          );
           if (n > 0.88) {
             c.strokeStyle = "#8fc6bb30";
             c.beginPath();
@@ -615,16 +666,24 @@ export class Renderer {
           { x: base.x + this.tw / 2, y: base.y },
           { x: base.x, y: base.y + this.th / 2 },
         ];
-        this.polygon(left, t.h === 1 ? "#817e5b" : "#486d55");
-        this.polygon(right, t.h === 1 ? "#696e53" : "#345847");
+        if (this.view !== "topdown") {
+          this.polygon(left, t.h === 1 ? "#817e5b" : "#486d55");
+          this.polygon(right, t.h === 1 ? "#696e53" : "#345847");
+        }
         let color =
           t.h === 1
             ? `hsl(48 27% ${57 + n * 6}%)`
             : t.h >= 5
               ? `hsl(116 16% ${51 + n * 8}%)`
               : `hsl(${139 - n * 10} ${27 + n * 5}% ${39 + t.h * 2 + n * 7}%)`;
-        this.diamond(p.x, p.y, this.tw, this.th, color, "#bdd1a310");
-        if (t.h === 1) {
+        this.tile(
+          p,
+          color,
+          this.view === "topdown"
+            ? `hsla(75 40% ${68 - t.h * 4}% / .33)`
+            : "#bdd1a310",
+        );
+        if (t.h === 1 && this.view !== "topdown") {
           c.strokeStyle = "#9cdac444";
           c.beginPath();
           c.moveTo(base.x - this.tw / 2, base.y + 1);
@@ -648,12 +707,19 @@ export class Renderer {
           }
           // Glow effect based on population (life energy)
           if (t.p > 0 && !this.reduced) {
-            const glow = Math.min(1, t.p / 40) * (0.5 + Math.sin(time * 0.7) * 0.2);
+            const glow =
+              Math.min(1, t.p / 40) * (0.5 + Math.sin(time * 0.7) * 0.2);
             c.save();
             c.globalAlpha = glow * 0.3;
             c.fillStyle = "#add49b";
             c.beginPath();
-            c.arc(p.x, p.y, this.tw * 0.4 + Math.sin(time * 0.9) * 0.2 * this.tw, 0, Math.PI * 2);
+            c.arc(
+              p.x,
+              p.y,
+              this.tw * 0.4 + Math.sin(time * 0.9) * 0.2 * this.tw,
+              0,
+              Math.PI * 2,
+            );
             c.fill();
             c.restore();
           }
@@ -695,14 +761,7 @@ export class Renderer {
         if (i === this.hover) {
           c.save();
           c.globalAlpha = 0.55;
-          this.diamond(
-            p.x,
-            p.y,
-            this.tw - 1,
-            this.th - 1,
-            "#e7f2c833",
-            "#f6f0ce",
-          );
+          this.tile(p, "#e7f2c833", "#f6f0ce");
           c.restore();
         }
       }
